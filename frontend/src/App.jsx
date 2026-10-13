@@ -4,7 +4,7 @@ import { Routes, Route, Link, NavLink, useParams, useNavigate } from 'react-rout
 import {  rs } from './data.js'
 import { useStore, Guard } from './store.jsx'
 import { Login, Register, PostAd, Payment, MyListings, Admin } from './pages.jsx'
-
+import { Menu, X, Building2 } from 'lucide-react'
 
 const Photo = ({ p, tall }) => (
   <div className={'photo' + (tall ? ' tall' : '')} style={{ '--h': p.hue }} role="img" aria-label={p.title}>
@@ -158,6 +158,63 @@ function Calculator() {
   )
 }
 
+function Navbar({ user, logout, cmpCount }) {
+  const [menuOpen, setMenuOpen] = useState(false)
+
+  return (
+   <header className="premium-navbar">
+      <Link to="/" className="premium-logo">
+        <Building2 size={28} />
+        <span>CEYLON <strong>ESTATES</strong></span>
+      </Link>
+
+      <button
+        className="mobile-menu-btn"
+        onClick={() => setMenuOpen(!menuOpen)}
+        aria-label="Toggle navigation"
+        aria-expanded={menuOpen}
+      >
+        {menuOpen ? <X /> : <Menu />}
+      </button>
+
+      <nav className={`premium-nav-links ${menuOpen ? 'open' : ''}`}
+           onClick={() => setMenuOpen(false)}>
+        <NavLink to="/" end>Home</NavLink>
+        <NavLink to="/properties">Properties</NavLink>
+        <NavLink to="/compare">Compare ({cmpCount})</NavLink>
+        <NavLink to="/calculator">Calculator</NavLink>
+
+        {user?.role === 'seller' && (
+          <>
+            <NavLink to="/my-listings">My Listings</NavLink>
+            <NavLink to="/post-ad">Post Property</NavLink>
+          </>
+        )}
+
+        {user?.role === 'admin' && (
+          <NavLink to="/admin">Admin</NavLink>
+        )}
+
+        {user ? (
+          <>
+            <span className="nav-username">{user.name}</span>
+            <button className="nav-outline-btn" onClick={logout}>
+              Sign Out
+            </button>
+          </>
+        ) : (
+          <>
+            <NavLink to="/login">Sign In</NavLink>
+            <Link to="/register" className="nav-primary-btn">
+              Get Started
+            </Link>
+          </>
+        )}
+      </nav>
+    </header>
+  )
+}
+
 export default function App() {
   const [propertiesData, setPropertiesData] = useState([])
   const [loading, setLoading] = useState(true)
@@ -183,11 +240,12 @@ export default function App() {
   const toggleCmp = id => setCmp(c => c.includes(id) ? c.filter(x => x !== id) : c.length < 3 ? [...c, id] : c)
   return (
     <>
-      <header className="nav"><Link to="/" className="logo">Ceylon Estates</Link>
-        <nav><NavLink to="/properties">Properties</NavLink><NavLink to="/compare">Compare ({cmp.length})</NavLink><NavLink to="/calculator">Calculator</NavLink>
-          {user?.role === 'seller' && <><NavLink to="/post-ad">Post an ad</NavLink><NavLink to="/my-listings">My listings</NavLink></>}
-          {user?.role === 'admin' && <NavLink to="/admin">Review ads</NavLink>}
-          {user ? <><span>{user.name}</span><button className="btn sm ghost" onClick={logout}>Sign out</button></> : <><Link to="/login">Sign in</Link><Link className="btn sm" to="/register">Register</Link></>}</nav></header>
+    <Navbar
+  user={user}
+  logout={logout}
+  cmpCount={cmp.length}
+/>
+     
       <main>
         <Routes>
           <Route path="/" element={<Home properties={propertiesData} />} />
