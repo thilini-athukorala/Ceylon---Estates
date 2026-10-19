@@ -1,0 +1,13 @@
+/* Ceylon Estates role-based dashboard */
+.ce-dashboard { max-width: 1200px; margin: 0 auto; padding: 48px 24px 70px; min-height: 70vh; }
+.ce-dashboard-head { background: linear-gradient(120deg, #103c49, #18818a); color: white; border-radius: 22px; padding: 44px 36px; margin-bottom: 30px; }
+.ce-dashboard-head h1 { font-size: clamp(28px, 4vw, 42px); color: white; margin: 8px 0 10px; }
+.ce-dashboard-head p { color: #e5f7f7; margin: 0; }
+.ce-dashboard-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 22px; }
+.ce-dashboard-card { background: white; border: 1px solid #e3ebed; border-radius: 18px; padding: 28px; text-decoration: none; color: #163f49; box-shadow: 0 5px 24px rgba(0,0,0,.06); transition: transform .2s, box-shadow .2s; }
+.ce-dashboard-card:hover { transform: translateY(-4px); box-shadow: 0 12px 28px rgba(0,0,0,.12); }
+.ce-dashboard-card h2 { font-size: 21px; margin: 12px 0; }
+.ce-dashboard-card p { color: #57717a; margin: 0 0 22px; }
+.ce-dashboard-icon { font-size: 36px; display: inline-block; }
+.ce-dashboard-open { color: #147e85; font-weight: 700; }
+@media(max-width: 600px) { .ce-dashboard { padding: 24px 16px 44px; } .ce-dashboard-head { padding: 28px 22px; } }

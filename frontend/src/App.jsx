@@ -1,16 +1,37 @@
 import { useState, useMemo , useEffect  } from 'react'
 import { getProperties } from './services/propertyService'
-import { Routes, Route, Link, NavLink, useParams, useNavigate } from 'react-router-dom'
+import { Routes, Route, Link, NavLink, useParams, useNavigate, Navigate } from 'react-router-dom'
 import {  rs } from './data.js'
-import { useStore, Guard } from './store.jsx'
+import { useStore } from './store.jsx'
 import { Login, Register, PostAd, Payment, MyListings, Admin } from './pages.jsx'
 import { Menu, X, Building2 } from 'lucide-react'
+import './dashboard.css'
+import './inquiry.css'
+import { MyInquiries, ReceivedInquiries } from './InquiryPages.jsx'
+import { sendInquiry } from './services/inquiryService'
 
-const Photo = ({ p, tall }) => (
-  <div className={'photo' + (tall ? ' tall' : '')} style={{ '--h': p.hue }} role="img" aria-label={p.title}>
-    <span>{p.type}</span>
-  </div>
-)
+function Photo({ p, tall }) {
+  const images = (p.images || []).filter(Boolean);
+  const [active, setActive] = useState(0);
+  const cover = images[active] || images[0];
+  return (
+    <div>
+      <div className={'photo' + (tall ? ' tall' : '')} style={{ '--h': p.hue, overflow: 'hidden', position: 'relative' }} role="img" aria-label={p.title}>
+        {cover && <img src={cover} alt={p.title} loading="lazy" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />}
+        <span style={{ position: 'relative', zIndex: 1 }}>{p.type}</span>
+      </div>
+      {tall && images.length > 1 && (
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 12 }}>
+          {images.map((url, i) => (
+            <button type="button" key={url + i} onClick={() => setActive(i)} aria-label={`Show photo ${i + 1}`} aria-pressed={active === i} style={{ padding: 0, border: active === i ? '3px solid #16818a' : '2px solid #ddd', borderRadius: 8, overflow: 'hidden', cursor: 'pointer' }}>
+              <img src={url} alt={`Property photo ${i + 1}`} style={{ display: 'block', width: 80, height: 65, objectFit: 'cover' }} />
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 function formatProperty(p) {
   return {
@@ -30,6 +51,7 @@ function formatProperty(p) {
     hue: 190,
     description: p.description,
     image: p.image,
+    images: Array.isArray(p.images) && p.images.length ? p.images : (p.image ? [p.image] : []),
   }
 }
 
@@ -79,7 +101,7 @@ function Listings({ properties , favs, toggleFav, cmp, toggleCmp }) {
   const set = k => e => setF({ ...f, [k]: e.target.value })
   const list = useMemo(() => properties
     .filter(p => (!f.q || (p.title + p.city).toLowerCase().includes(f.q.toLowerCase())) && (!f.purpose || p.purpose === f.purpose) && (!f.type || p.type === f.type) && p.beds >= +f.beds && (!f.max || p.price <= +f.max))
-    .sort((a, b) => f.sort === 'low' ? a.price - b.price : f.sort === 'high' ? b.price - a.price : 0), [f])
+    .sort((a, b) => f.sort === 'low' ? a.price - b.price : f.sort === 'high' ? b.price - a.price : 0), [f, properties])
    console.log("Listings properties:", properties)
 
     return (
@@ -100,46 +122,119 @@ function Listings({ properties , favs, toggleFav, cmp, toggleCmp }) {
   )
 }
 
-function Details({ properties,  favs, toggleFav }) {
-  const p = properties.find(x => String(x.id) === String(useParams().id))
-  const [sent, setSent] = useState(''); const { user } = useStore()
-  if (!p) return <div className="wrap"><p className="empty">This listing is no longer available.</p></div>
-  const submit = kind => e => { e.preventDefault(); setSent(kind === 'view' ? 'Viewing requested. The owner will reply soon.' : 'Inquiry sent.') }
-  return (
-    <div className="wrap detail">
-      <Photo p={p} tall />
-      <div className="layout">
-        <div>
-          <span className="tag">For {p.purpose.toLowerCase()}</span><h1>{p.title}</h1>
-          <p className="price big">{rs(p.price)}</p>
-          <ul className="specs"><li><b>{p.beds || '-'}</b> Bedrooms</li><li><b>{p.baths || '-'}</b> Bathrooms</li><li><b>{p.land}</b> Perches</li><li><b>{p.area || '-'}</b> sq ft</li></ul>
-          <h2>Amenities</h2><p>{p.amenities.join(', ')}</p>
-          <button className="btn ghost" onClick={() => toggleFav(p.id)}>{favs.includes(p.id) ? 'Saved' : 'Save to favourites'}</button>
-        </div>
-        <aside className="panel">
-          {!user ? <p><Link className="link" to="/login">Sign in</Link> to request a viewing or send an inquiry.</p> : sent ? <p role="status" className="ok">{sent}</p> : <>
-            <form onSubmit={submit('view')}><h3>Request a viewing</h3>
-              <label>Date<input type="date" required min={new Date().toISOString().slice(0, 10)} /></label>
-              <label>Time<input type="time" required /></label><button className="btn">Request viewing</button></form>
-            <form onSubmit={submit('inq')}><h3>Send an inquiry</h3>
-              <label>Message<textarea required rows="3" /></label><button className="btn ghost">Send inquiry</button></form></>}
-        </aside>
-      </div>
-    </div>
-  )
+function Details({ properties, favs, toggleFav }) {
+  const { id } = useParams();
+  const p = properties.find(x => String(x.id) === String(id));
+  const { user } = useStore();
+  const [sent, setSent] = useState('');
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState('');
+  const submit = kind => async e => {
+    e.preventDefault();
+    if (!p) return;
+    const form = e.currentTarget;
+    setSent(''); setError(''); setSending(true);
+    const values = Object.fromEntries(new FormData(form));
+    try {
+      await sendInquiry({ propertyId: p.id, message: kind === 'VIEWING' ? `I would like to request a viewing of ${p.title}.` : values.message, kind,
+        ...(kind === 'VIEWING' ? { viewingDate: values.date, viewingTime: values.time } : {}) });
+      setSent(kind === 'VIEWING' ? 'Viewing request sent to owner.' : 'Inquiry sent to owner.');
+      form.reset();
+    } catch (err) { setError(err.message); }
+    finally { setSending(false); }
+  };
+  if (!p) return <div className="wrap"><p className="empty">This listing is no longer available.</p></div>;
+  return <div className="wrap detail"><Photo p={p} tall />
+    <div className="layout"><div><span className="tag">For {p.purpose.toLowerCase()}</span><h1>{p.title}</h1>
+      <p className="price big">{rs(p.price)}</p>
+      <ul className="specs"><li><b>{p.beds || '-'}</b> Bedrooms</li><li><b>{p.baths || '-'}</b> Bathrooms</li><li><b>{p.land}</b> Perches</li><li><b>{p.area || '-'}</b> sq ft</li></ul>
+      <h2>Amenities</h2><p>{p.amenities.join(', ') || 'Not specified'}</p>
+      <button className="btn ghost" onClick={() => toggleFav(p.id)}>{favs.includes(p.id) ? 'Saved' : 'Save to favourites'}</button>
+    </div><aside className="panel">
+      {!user ? <p><Link className="link" to="/login">Sign in</Link> as a customer to request a viewing or send an inquiry.</p> : user.role?.toUpperCase() !== 'CUSTOMER' ? <p>Only customer accounts can send inquiries.</p> : <>
+        {sent && <p className="ok" role="status">{sent} <Link to="/my-inquiries">View my inquiries</Link></p>}
+        {error && <p role="alert" className="err">{error}</p>}
+        <form onSubmit={submit('VIEWING')}><h3>Request a viewing</h3>
+          <label>Date<input type="date" name="date" required min={new Date().toISOString().slice(0,10)} /></label>
+          <label>Time<input type="time" name="time" required /></label><button className="btn" disabled={sending}>Request viewing</button></form>
+        <form onSubmit={submit('INQUIRY')}><h3>Send an inquiry</h3>
+          <label>Message<textarea name="message" required rows="3" maxLength="2000" /></label><button className="btn ghost" disabled={sending}>Send inquiry</button></form>
+      </>}
+    </aside></div></div>;
 }
 
-function Compare({ properties,cmp }) {
-  const items = properties.filter(p => cmp.includes(p.id))
-  const rows = [['Price', p => rs(p.price)], ['Location', p => p.city], ['Type', p => p.type], ['Bedrooms', p => p.beds], ['Bathrooms', p => p.baths], ['Land (perches)', p => p.land], ['Floor area (sq ft)', p => p.area || '-'], ['Furnished', p => p.furnished ? 'Yes' : 'No'], ['Parking', p => p.parking ? 'Yes' : 'No'], ['Amenities', p => p.amenities.join(', ')]]
+function Compare({ properties, cmp }) {
+  const items = properties.filter(p => cmp.includes(p.id));
+
+  const rows = [
+    ['Price', p => rs(p.price)],
+    ['Location', p => p.city],
+    ['Type', p => p.type],
+    ['Bedrooms', p => p.beds],
+    ['Bathrooms', p => p.baths],
+    ['Land (perches)', p => p.land],
+    ['Floor area (sq ft)', p => p.area || '-'],
+    ['Furnished', p => p.furnished ? 'Yes' : 'No'],
+    ['Parking', p => p.parking ? 'Yes' : 'No'],
+    ['Amenities', p => p.amenities.join(', ') || 'Not specified']
+  ];
+
   return (
-    <div className="wrap"><h1>Compare properties</h1>
-      {items.length < 2 ? <p className="empty">Choose 2 or 3 properties on the listings page to compare them here.</p> :
-        <div className="scroll"><table><thead><tr><th />{items.map(p => <th key={p.id}>{p.title}</th>)}</tr></thead>
-          <tbody>{rows.map(([l, fn]) => <tr key={l}><th>{l}</th>{items.map(p => <td key={p.id}>{fn(p)}</td>)}</tr>)}</tbody></table></div>}
+    <div className="wrap">
+      <h1>Compare properties</h1>
+
+      {items.length < 2 ? (
+        <p className="empty">
+          Choose 2 or 3 properties on the listings page
+          to compare them here.
+        </p>
+      ) : (
+        <div className="compare-table-container">
+          <table className="compare-table">
+            <thead>
+              <tr>
+                <th>Features</th>
+
+                {items.map(p => (
+                  <th key={p.id}>
+                    <span className="compare-property-title">
+                      {p.title}
+                    </span>
+                    <div className="compare-property-location">
+                      📍 {p.city}
+                    </div>
+                  </th>
+                ))}
+              </tr>
+            </thead>
+
+            <tbody>
+              {rows.map(([label, getValue]) => (
+                <tr key={label}>
+                  <th scope="row">{label}</th>
+
+                  {items.map(p => (
+                    <td
+                      key={p.id}
+                      className={
+                        label === 'Price'
+                          ? 'compare-price'
+                          : ''
+                      }
+                    >
+                      {getValue(p)}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
-  )
+  );
 }
+
 
 function Calculator() {
   const [v, setV] = useState({ price: 30000000, down: 6000000, rate: 12, years: 20 })
@@ -153,6 +248,69 @@ function Calculator() {
         <p className="meta">Estimated loan</p><p className="price big">{rs(Math.round(loan))}</p>
         <p className="meta">Estimated monthly payment</p><p className="price big">{rs(Math.round(m || 0))}</p>
         <small>This is an estimate only. Your bank's offer may differ.</small>
+      </div>
+    </div>
+  )
+}
+
+
+// Frontend navigation guard (backend API permissions must also be enforced).
+function RoleGuard({ roles, children }) {
+  const { user } = useStore()
+  if (!user) return <Navigate to="/login" replace />
+  if (!roles.includes(user.role?.toUpperCase())) return <Navigate to="/dashboard" replace />
+  return children
+}
+
+function Dashboard() {
+  const { user } = useStore()
+  if (!user) return <Navigate to="/login" replace />
+
+  const sections = {
+    ADMIN: {
+      title: 'Admin Dashboard', subtitle: 'Manage the Ceylon Estates platform',
+      links: [
+        { icon: '🏠', title: 'Manage Properties', desc: 'Review and manage listings', to: '/admin' },
+        { icon: '👥', title: 'Administration', desc: 'Open the admin management page', to: '/admin' },
+        { icon: '🔎', title: 'Browse Properties', desc: 'See all public properties', to: '/properties' },
+      ],
+    },
+    OWNER: {
+      title: 'Property Owner Dashboard', subtitle: 'Manage your real estate listings',
+      links: [
+        { icon: '➕', title: 'Add Property', desc: 'Create a new property listing', to: '/post-ad' },
+        { icon: '🏡', title: 'My Listings', desc: 'View your listings', to: '/my-listings' },
+        { icon: '✉️', title: 'Customer Inquiries', desc: 'Read and reply to customers', to: '/received-inquiries' },
+      ],
+    },
+    CUSTOMER: {
+      title: 'Customer Dashboard', subtitle: 'Discover your next home in Sri Lanka',
+      links: [
+        { icon: '🏠', title: 'Browse Properties', desc: 'Search available properties', to: '/properties' },
+        { icon: '⚖️', title: 'Compare Properties', desc: 'Compare selected listings', to: '/compare' },
+        { icon: '✉️', title: 'My Inquiries', desc: 'See owner replies', to: '/my-inquiries' },
+      ],
+    },
+  }
+  const section = sections[user.role?.toUpperCase()]
+  if (!section) return <div className="wrap"><p>Unknown account role. Please sign in again.</p></div>
+
+  return (
+    <div className="ce-dashboard">
+      <div className="ce-dashboard-head">
+        <p>Welcome back, {user.name}!</p>
+        <h1>{section.title}</h1>
+        <p>{section.subtitle}</p>
+      </div>
+      <div className="ce-dashboard-grid">
+        {section.links.map(item => (
+          <Link key={item.title} to={item.to} className="ce-dashboard-card">
+            <span className="ce-dashboard-icon" aria-hidden="true">{item.icon}</span>
+            <h2>{item.title}</h2>
+            <p>{item.desc}</p>
+            <span className="ce-dashboard-open">Open section →</span>
+          </Link>
+        ))}
       </div>
     </div>
   )
@@ -184,14 +342,19 @@ function Navbar({ user, logout, cmpCount }) {
         <NavLink to="/compare">Compare ({cmpCount})</NavLink>
         <NavLink to="/calculator">Calculator</NavLink>
 
-        {user?.role === 'seller' && (
+        {user && <NavLink to="/dashboard">Dashboard</NavLink>}
+
+        {user?.role?.toUpperCase() === 'OWNER' && (
           <>
             <NavLink to="/my-listings">My Listings</NavLink>
             <NavLink to="/post-ad">Post Property</NavLink>
+            <NavLink to="/received-inquiries">Inquiries</NavLink>
           </>
         )}
 
-        {user?.role === 'admin' && (
+        {user?.role?.toUpperCase() === 'CUSTOMER' && <NavLink to="/my-inquiries">My Inquiries</NavLink>}
+
+        {user?.role?.toUpperCase() === 'ADMIN' && (
           <NavLink to="/admin">Admin</NavLink>
         )}
 
@@ -276,12 +439,15 @@ export default function App() {
   element={<Compare properties={propertiesData} cmp={cmp} />}
 />
           <Route path="/calculator" element={<Calculator />} />
+          <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
-          <Route path="/post-ad" element={<Guard roles={['seller']}><PostAd /></Guard>} />
-          <Route path="/pay/:id" element={<Guard roles={['seller']}><Payment /></Guard>} />
-          <Route path="/my-listings" element={<Guard roles={['seller']}><MyListings /></Guard>} />
-          <Route path="/admin" element={<Guard roles={['admin']}><Admin /></Guard>} />
+          <Route path="/post-ad" element={<RoleGuard roles={['OWNER']}><PostAd /></RoleGuard>} />
+          <Route path="/pay/:id" element={<RoleGuard roles={['OWNER']}><Payment /></RoleGuard>} />
+          <Route path="/my-listings" element={<RoleGuard roles={['OWNER']}><MyListings /></RoleGuard>} />
+          <Route path="/my-inquiries" element={<RoleGuard roles={['CUSTOMER']}><MyInquiries /></RoleGuard>} />
+          <Route path="/received-inquiries" element={<RoleGuard roles={['OWNER']}><ReceivedInquiries /></RoleGuard>} />
+          <Route path="/admin" element={<RoleGuard roles={['ADMIN']}><Admin /></RoleGuard>} />
         </Routes>
       </main>
       <footer className="foot">Ceylon Estates. Listing approval does not prove legal ownership.</footer>
