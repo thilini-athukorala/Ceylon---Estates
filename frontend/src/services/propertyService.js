@@ -1,4 +1,4 @@
-const API_URL = "http://localhost:5000/api/properties";
+const API_URL = "/api/properties";
 
 // Get all properties
 export async function getProperties() {

@@ -30,7 +30,7 @@ describe('Property API Service Tests', () => {
 
     expect(result).toEqual(properties)
     expect(fetch).toHaveBeenCalledWith(
-      'http://localhost:5000/api/properties'
+      '/api/properties'
     )
   })
 
@@ -46,7 +46,7 @@ describe('Property API Service Tests', () => {
 
     expect(result).toEqual(property)
     expect(fetch).toHaveBeenCalledWith(
-      'http://localhost:5000/api/properties/1'
+      '/api/properties/1'
     )
   })
 
@@ -63,7 +63,7 @@ describe('Property API Service Tests', () => {
     expect(result).toEqual(property)
 
     expect(fetch).toHaveBeenCalledWith(
-      'http://localhost:5000/api/properties',
+      '/api/properties',
       expect.objectContaining({
         method: 'POST',
         body: JSON.stringify(property)
@@ -84,7 +84,7 @@ describe('Property API Service Tests', () => {
     expect(result).toEqual(property)
 
     expect(fetch).toHaveBeenCalledWith(
-      'http://localhost:5000/api/properties/1',
+      '/api/properties/1',
       expect.objectContaining({
         method: 'PUT'
       })
@@ -102,7 +102,7 @@ describe('Property API Service Tests', () => {
     expect(result.message).toBe('Deleted')
 
     expect(fetch).toHaveBeenCalledWith(
-      'http://localhost:5000/api/properties/1',
+      '/api/properties/1',
       expect.objectContaining({
         method: 'DELETE'
       })

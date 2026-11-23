@@ -1,0 +1,35 @@
+services:
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    volumes:
+      - mongo_data:/data/db
+    networks:
+      - ceylon-network
+
+  backend:
+    image: ceylon-estates-backend:ci
+    restart: unless-stopped
+    environment:
+      PORT: "5000"
+      MONGO_URI: mongodb://mongo:27017/ceylon-estates
+    depends_on:
+      - mongo
+    networks:
+      - ceylon-network
+
+  frontend:
+    image: ceylon-estates-frontend:ci
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    depends_on:
+      - backend
+    networks:
+      - ceylon-network
+
+networks:
+  ceylon-network:
+
+volumes:
+  mongo_data:
