@@ -6,6 +6,7 @@ pipeline {
     }
 
     stages {
+
         stage('Checkout Code') {
             steps {
                 checkout scm
@@ -22,12 +23,24 @@ pipeline {
             }
         }
 
+        stage('Backend API Tests') {
+            steps {
+                sh '''
+                    docker run --rm \
+                        -v "$PWD/backend:/app" \
+                        -w /app \
+                        node:22-alpine \
+                        sh -c "npm ci && node --test tests/*.test.js"
+                '''
+            }
+        }
+
         stage('Build Frontend Image') {
             steps {
                 sh '''
                     docker build \
-                      -t ceylon-estates-frontend:ci \
-                      ./frontend
+                        -t ceylon-estates-frontend:ci \
+                        ./frontend
                 '''
             }
         }
@@ -36,11 +49,12 @@ pipeline {
             steps {
                 sh '''
                     docker build \
-                      -t ceylon-estates-backend:ci \
-                      ./backend
+                        -t ceylon-estates-backend:ci \
+                        ./backend
                 '''
             }
         }
+
     }
 
     post {
