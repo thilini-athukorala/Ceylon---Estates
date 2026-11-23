@@ -1,2 +1,4 @@
 node_modules/
 .envagent.jar
+
+/agent.jar
