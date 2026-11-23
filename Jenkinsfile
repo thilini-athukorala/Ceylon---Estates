@@ -6,7 +6,6 @@ pipeline {
     }
 
     stages {
-
         stage('Checkout Code') {
             steps {
                 checkout scm
@@ -35,26 +34,27 @@ pipeline {
             }
         }
 
+        stage('Frontend Tests') {
+            steps {
+                sh '''
+                    docker run --rm \
+                        -v "$PWD/frontend:/source:ro" \
+                        -w /tmp \
+                        -e HOME=/tmp \
+                        -e npm_config_cache=/tmp/.npm \
+                        node:22-alpine \
+                        sh -c '
+                            mkdir -p /tmp/frontend &&
+                            cp -R /source/. /tmp/frontend/ &&
+                            cd /tmp/frontend &&
+                            npm ci &&
+                            npm test
+                        '
+                '''
+            }
+        }
+
         stage('Build Frontend Image') {
-	stage('Frontend Tests') {
-    steps {
-        sh '''
-            docker run --rm \
-                -v "$PWD/frontend:/source:ro" \
-                -w /tmp \
-                -e HOME=/tmp \
-                -e npm_config_cache=/tmp/.npm \
-                node:22-alpine \
-                sh -c '
-                    mkdir -p /tmp/frontend &&
-                    cp -R /source/. /tmp/frontend/ &&
-                    cd /tmp/frontend &&
-                    npm ci &&
-                    npm test
-                '
-        '''
-    }
-}
             steps {
                 sh '''
                     docker build \
@@ -73,7 +73,6 @@ pipeline {
                 '''
             }
         }
-
     }
 
     post {
